@@ -120,9 +120,8 @@ void qReq()
     std::cout << "Entered qReq\n";
     if (!reqCompleted || requestList.empty())
         return;
-    std::unique_ptr<libcamera::Request> req = std::move(requestList.back());
     std::cout << "Attempt to Queue request\n";
-    camera->queueRequest(req.get());
+    camera->queueRequest(requestList.back().get());
     reqCompleted = false;
     std::cout << "Queued request\n";
 }
