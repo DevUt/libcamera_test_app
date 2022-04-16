@@ -1,8 +1,0 @@
-[
-  {
-    "directory": "/home/devut/Projects/CamTest/build",
-    "command": "c++ -ICamTest@exe -I. -I.. -I/usr/local/include/libcamera -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I/usr/include/x86_64-linux-gnu/qt5 -fdiagnostics-color=always -pipe -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Werror -std=c++17 -g -pthread -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -fPIC -DQT_NO_KEYWORDS -MD -MQ 'CamTest@exe/main.cpp.o' -MF 'CamTest@exe/main.cpp.o.d' -o 'CamTest@exe/main.cpp.o' -c ../main.cpp",
-    "file": "../main.cpp",
-    "output": "CamTest@exe/main.cpp.o"
-  }
-]

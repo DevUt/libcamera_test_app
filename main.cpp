@@ -27,6 +27,9 @@ static std::vector<std::unique_ptr<Request>> requestList;
 //flag to indicate that threads should now exit
 std::atomic_bool quitThread;
 
+//flag to indicate if requestHasCompleted
+std::atomic_bool reqCompleted = true;
+
 // Here we would display the stream
 static QImage viewfinder;
 
@@ -69,37 +72,32 @@ static void requestComplete(Request *request)
         viewfinder_label->show();
         munmap(mem, size);
     }
-    request->reuse(Request::ReuseBuffers); // No reusing as the paramters may change hence create a new request
-    camera->queueRequest(request);
+    reqCompleted = true;
+    // request->reuse(Request::ReuseBuffers); // No reusing as the paramters may change hence create a new request
+    // camera->queueRequest(request);
 }
 
 void createReq(libcamera::Stream *stream, libcamera::FrameBuffer *buffer)
 {
-    while (true)
-    {   
-        std::cout<<"Entered createReq\n";
-        if(quitThread)
-            return;
-        std::unique_lock lck(requestLock);
-        std::cout<<"Entered createReq and locked\n";
-
-        std::unique_ptr<Request> request = camera->createRequest();
-        if(requestList.size() == REQUEST_LIST_SIZE){
-            continue;
-        }
-        if (!request)
-        {
-            std::cerr << "Couldn't create a request\n";
-            exit(-ENOMEM);
-        }
-        int ret = request->addBuffer(stream, buffer);
-        if (ret < 0)
-        {
-            std::cerr << "Can't set buffer for request\n";
-            exit(ret);
-        }
-        requestList.push_back(std::move(request));
+    std::cout<<"Entered createReq\n";
+    if(quitThread)
+        return;
+    std::unique_lock lck(requestLock);
+    std::cout<<"Entered createReq and locked\n";
+    std::unique_ptr<Request> request = camera->createRequest();
+    if (!request)
+    {
+        std::cerr << "Couldn't create a request\n";
+        exit(-ENOMEM);
     }
+    int ret = request->addBuffer(stream, buffer);
+    if (ret < 0)
+    {
+        std::cerr << "Can't set buffer for request\n";
+        exit(ret);
+    }
+    requestList.push_back(std::move(request));
+    
 }
 
 void qReq(){
@@ -113,9 +111,14 @@ void qReq(){
 
         if(requestList.empty())
             continue;
-        camera->queueRequest(requestList.back().get());
+        if(!reqCompleted)
+            continue;
+        std::unique_ptr<Request> req(std::move(requestList.back()));
+        std::cout<<"Attempt to Queue request\n";
+        camera->queueRequest(req.get());
+        req->reuse(Request::ReuseBuffers);
+        reqCompleted=false;
         std::cout<<"Queued request\n";
-        requestList.pop_back();
     }
 
 }
@@ -184,44 +187,47 @@ int main(int argc, char *argv[])
     // Setup a singleStream from the first config
     Stream *stream = streamConfig.stream();
     const auto &buffers = allocator->buffers(stream);
-    std::vector<std::unique_ptr<Request>> requests;
+    // std::vector<std::unique_ptr<Request>> requests;
 
     // Register callback function for request completed signal
     camera->requestCompleted.connect(requestComplete);
     // Q requests to the camera to capture
-    for (unsigned int i = 0; i < buffers.size(); ++i)
-    {
-        std::unique_ptr<Request> request = camera->createRequest();
-        if (!request)
-        {
-            std::cerr << "Couldn't create a request\n";
-            return -ENOMEM;
-        }
+    // for (unsigned int i = 0; i < buffers.size(); ++i)
+    // {
+    //     std::unique_ptr<Request> request = camera->createRequest();
+    //     if (!request)
+    //     {
+    //         std::cerr << "Couldn't create a request\n";
+    //         return -ENOMEM;
+    //     }
 
-        const std::unique_ptr<FrameBuffer> &buffer = buffers[i];
-        int ret = request->addBuffer(stream, buffer.get());
-        if (ret < 0)
-        {
-            std::cerr << "Can't set buffer for request\n";
-            return ret;
-        }
+    //     const std::unique_ptr<FrameBuffer> &buffer = buffers[i];
+    //     int ret = request->addBuffer(stream, buffer.get());
+    //     if (ret < 0)
+    //     {
+    //         std::cerr << "Can't set buffer for request\n";
+    //         return ret;
+    //     }
 
-        requests.push_back(std::move(request));
-    }
+    //     requests.push_back(std::move(request));
+    // }
 
 
     // Finaly start the camera
     camera->start();
-    for (std::unique_ptr<libcamera::Request> &request : requests)
-    {
-        camera->queueRequest(request.get());
-    }
-    // std::thread createReqThread(createReq, stream, buffers.front().get());
-    // std::thread qReqThread(qReq);
-    // createReqThread.detach();
-    // qReqThread.detach();
+    // for (std::unique_ptr<libcamera::Request> &request : requests)
+    // {
+    //     camera->queueRequest(request.get());
+    // }
+    std::thread createReqThread(createReq, stream, buffers.front().get());
+    std::thread qReqThread(qReq);
+    createReqThread.join();
+    qReqThread.detach();
     // Setup the window
+    std::cout<<"Starting window\n";
     int ret = window.exec();
+    std::cout<<"Quiting window\n";
+
     quitThread = true;
     // Clean Up
     camera->stop();
