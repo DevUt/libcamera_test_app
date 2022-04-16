@@ -10,7 +10,7 @@ qt5_dep = dependency('qt5',
                      method : 'pkg-config',
                      modules : ['Core', 'Gui', 'Widgets'])
 
-qt5_cpp_args = ['-DQT_NO_KEYWORDS']
+qt5_cpp_args = ['-DQT_NO_KEYWORDS','-g']
 src_files = files(['main.cpp'])
 dep = dependency('libcamera',required : true)
 cam = executable('CamTest',src_files,dependencies : [dep,qt5_dep,thread_dep],install:true,cpp_args: qt5_cpp_args)
