@@ -11,18 +11,9 @@
 #include <QApplication>
 #include <QImage>
 #include <QLabel>
+#include <QMainWindow>
 
 #include <libcamera/libcamera.h>
-
-#define REQUEST_LIST_SIZE 1
-
-using namespace libcamera;
-
-// Main physical camera obj
-static std::shared_ptr<libcamera::Camera> camera;
-
-// Shared Request Q
-static std::vector<std::unique_ptr<Request>> requestList;
 
 // flag to indicate that threads should now exit
 std::atomic_bool quitThread;
@@ -30,18 +21,15 @@ std::atomic_bool quitThread;
 // flag to indicate if requestHasCompleted
 std::atomic_bool reqCompleted = true;
 
-// Here we would display the stream
-static QImage viewfinder;
-
-// The label to hold our viewfinder
-static QLabel *viewfinder_label;
-
 /* We use createReq to send 1 request,
  * we don't want it
  */
 std::mutex requestLock;
 
-void qReq();
+//Temp header brightness ctrl
+float brightnessVal = 0.0;
+
+#include "main.h"
 
 static void requestComplete(Request *request)
 {
@@ -88,8 +76,9 @@ void createReq(libcamera::Stream *stream, libcamera::FrameBuffer *buffer)
             return;
         std::unique_lock lck(requestLock);
         std::cout << "Entered createReq and locked\n";
-        if(requestList.size() >= REQUEST_LIST_SIZE){
-            std::cout<<"Skipping \n";
+        if (requestList.size() >= REQUEST_LIST_SIZE)
+        {
+            std::cout << "Skipping \n";
             continue;
         }
         std::unique_ptr<Request> request = camera->createRequest();
@@ -98,19 +87,21 @@ void createReq(libcamera::Stream *stream, libcamera::FrameBuffer *buffer)
             std::cerr << "Couldn't create a request\n";
             exit(-ENOMEM);
         }
-        std::cout<<"Created req\n";
+        std::cout << "Created req\n";
         int ret = request->addBuffer(stream, buffer);
         if (ret < 0)
         {
             std::cerr << "Can't set buffer for request\n";
             exit(ret);
         }
-        std::cout<<"Added buffer\n";
+        std::cout << "Added buffer\n";
+        ControlList &controls = request->controls();
+        controls.set(controls::Brightness,brightnessVal);
+        std::cout<<"Brightness :"<<brightnessVal<<'\n';
         requestList.push_back(std::move(request));
         qReq();
     }
 }
-
 
 void qReq()
 {
@@ -126,10 +117,23 @@ void qReq()
     std::cout << "Queued request\n";
 }
 
+void brightnessChanges(){
+    std::unique_lock lck(requestLock);
+    brightnessVal = float(slider->value())/(float)10;
+}
+
 int main(int argc, char *argv[])
 {
-    QApplication window(argc, argv);
+    QApplication app(argc, argv);
     viewfinder_label = new QLabel;
+    slider = new QSlider;
+
+    slider->setMaximum(10);
+    slider->setSingleStep(1);
+    slider->setValue(0);
+    slider->setMinimum(-10);
+    QObject::connect(slider,&QSlider::valueChanged,brightnessChanges);
+    slider->show();
     // Handles to the CameraManager
     std::unique_ptr<CameraManager> cm = std::make_unique<CameraManager>();
 
@@ -224,8 +228,9 @@ int main(int argc, char *argv[])
     //     camera->queueRequest(request.get());
     // }
     // Setup the window
+
     std::cout << "Starting window\n";
-    int ret = window.exec();
+    int ret = app.exec();
     std::cout << "Quiting window\n";
 
     quitThread = true;
